@@ -22,7 +22,8 @@ local CONFIG = {
     ESP_HealthColor = Color3.fromRGB(50, 255, 50),
     ESP_TracerColor = Color3.fromRGB(255, 50, 50),
     ESP_Tracers = true,
-    ESP_Boxes = true,
+    ESP_Boxes = false,
+    ESP_Skeleton = true,
     ESP_Names = true,
     ESP_Health = true,
 
@@ -178,11 +179,46 @@ end
 -- ESP
 -- =============================================
 local ESPObjects = {}
+local R15Bones = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
+}
+local R6Bones = {
+    {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"},
+}
+local function updateSkeleton(container, char, human)
+    local bones = human.RigType == Enum.HumanoidRigType.R15 and R15Bones or R6Bones
+    for index = 1, #R15Bones do
+        local line = container:FindFirstChild(tostring(index))
+        local pair = bones[index]
+        local a = pair and char:FindFirstChild(pair[1])
+        local b = pair and char:FindFirstChild(pair[2])
+        line.Visible = false
+        if Camera and a and b and a:IsA("BasePart") and b:IsA("BasePart") then
+            local p, visibleA = Camera:WorldToScreenPoint(a.Position)
+            local q, visibleB = Camera:WorldToScreenPoint(b.Position)
+            if visibleA and visibleB and p.Z > 0 and q.Z > 0 then
+                local start = Vector2.new(p.X, p.Y)
+                local finish = Vector2.new(q.X, q.Y)
+                local delta = finish - start
+                local center = (start + finish) / 2
+                line.Position = UDim2.fromOffset(center.X, center.Y)
+                line.Size = UDim2.fromOffset(delta.Magnitude, 2)
+                line.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+                line.Visible = true
+            end
+        end
+    end
+end
 
 local function removeESP(player)
     if ESPObjects[player] then
         for _, obj in pairs(ESPObjects[player]) do
-            if obj and obj.Parent then obj:Remove() end
+            if obj then obj:Destroy() end
         end
         ESPObjects[player] = nil
     end
@@ -193,14 +229,22 @@ local function createESP(player)
     removeESP(player)
     local objects = {}
 
-    if CONFIG.ESP_Boxes then
-        local box = Instance.new("BoxHandleAdornment")
-        box.Size = Vector3.new(4, 6, 4)
-        box.AlwaysOnTop = true
-        box.ZIndex = 5
-        box.Color3 = CONFIG.ESP_BoxColor
-        box.Transparency = 0.5
-        objects.Box = box
+    if CONFIG.ESP_Skeleton then
+        local container = Instance.new("Frame")
+        container.Name = "Skeleton_" .. player.UserId
+        container.Size = UDim2.fromScale(1, 1)
+        container.BackgroundTransparency = 1
+        container.Parent = FOVGui
+        for index = 1, #R15Bones do
+            local line = Instance.new("Frame")
+            line.Name = tostring(index)
+            line.AnchorPoint = Vector2.new(0.5, 0.5)
+            line.BorderSizePixel = 0
+            line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            line.Visible = false
+            line.Parent = container
+        end
+        objects.Skeleton = container
     end
 
     local billboard = Instance.new("BillboardGui")
@@ -262,7 +306,7 @@ local function updateESP()
                 local root  = char:FindFirstChild("HumanoidRootPart")
                 local human = char:FindFirstChildOfClass("Humanoid")
 
-                if root and human then
+                if root and human and human.Health > 0 then
                     if not ESPObjects[player] then createESP(player) end
                     local objs = ESPObjects[player]
                     if not objs then continue end
@@ -270,9 +314,8 @@ local function updateESP()
                     local dist = (RootPart.Position - root.Position).Magnitude
                     if dist > CONFIG.ESP_Distance then removeESP(player) continue end
 
-                    if objs.Box then
-                        objs.Box.Adornee = root
-                        objs.Box.Parent  = root
+                    if objs.Skeleton then
+                        updateSkeleton(objs.Skeleton, char, human)
                     end
                     if objs.Billboard then
                         objs.Billboard.Adornee = root
@@ -304,7 +347,19 @@ Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
 -- =============================================
 -- SILENT AIM
 -- =============================================
+local visibilityParams = RaycastParams.new()
+visibilityParams.FilterType = Enum.RaycastFilterType.Exclude
+local function hasLineOfSight(part, targetCharacter)
+    if not Camera then return false end
+    visibilityParams.FilterDescendantsInstances = {Character, Camera}
+    local origin = Camera.CFrame.Position
+    local hit = workspace:Raycast(origin, part.Position - origin, visibilityParams)
+    return hit == nil or hit.Instance:IsDescendantOf(targetCharacter)
+end
+
 local function getClosestToMouse()
+    Camera = workspace.CurrentCamera
+    if not Camera then return nil end
     local mousePos   = UserInputService:GetMouseLocation()
     local closest    = nil
     local closestDst = CONFIG.SilentAim_FOV
@@ -320,7 +375,10 @@ local function getClosestToMouse()
             local sp, onScreen = Camera:WorldToScreenPoint(part.Position)
             if onScreen then
                 local d = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
-                if d < closestDst then closestDst = d; closest = part end
+                if d < closestDst and hasLineOfSight(part, char) then
+                    closestDst = d
+                    closest = part
+                end
             end
         end
     end
@@ -420,7 +478,7 @@ end)
 -- =============================================
 -- MAIN LOOP
 -- =============================================
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function()
     updateESP()
 end)
 
