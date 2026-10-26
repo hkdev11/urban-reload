@@ -317,7 +317,7 @@ local function getClosestToMouse()
         local part  = char:FindFirstChild(CONFIG.SilentAim_TargetPart) or char:FindFirstChild("HumanoidRootPart")
         local human = char:FindFirstChildOfClass("Humanoid")
         if part and human and human.Health > 0 then
-            local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+            local sp, onScreen = Camera:WorldToScreenPoint(part.Position)
             if onScreen then
                 local d = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
                 if d < closestDst then closestDst = d; closest = part end
