@@ -27,11 +27,11 @@ local CONFIG = {
     ESP_Health = true,
 
     SilentAim_Enabled = true,
-    SilentAim_FOV = 150,
+    SilentAim_FOV = 250,
     SilentAim_TargetPart = "Head",
     SilentAim_TeamCheck = true,
 
-    NoRecoil_Enabled = true,
+    NoRecoil_Enabled = false,
 
     AutoFarm_Enabled = false,
     AutoFarm_Delay = 0.1,
@@ -123,6 +123,29 @@ HintLabel.TextScaled = true
 HintLabel.Font = Enum.Font.Gotham
 HintLabel.Text = "Appuie sur [H] pour cacher le HUD"
 HintLabel.Parent = Gui
+
+-- Separate screen coordinates keep the circle aligned with GetMouseLocation.
+local FOVGui = Instance.new("ScreenGui")
+FOVGui.Name = "UrbanReloadFOV"
+FOVGui.IgnoreGuiInset = true
+FOVGui.ResetOnSpawn = false
+FOVGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local FOVCircle = Instance.new("Frame")
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Size = UDim2.fromOffset(CONFIG.SilentAim_FOV * 2, CONFIG.SilentAim_FOV * 2)
+FOVCircle.Parent = FOVGui
+Instance.new("UICorner", FOVCircle).CornerRadius = UDim.new(0.5, 0)
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Color = Color3.fromRGB(255, 255, 255)
+FOVStroke.Thickness = 1
+FOVStroke.Parent = FOVCircle
+RunService.RenderStepped:Connect(function()
+    Camera = workspace.CurrentCamera
+    local mouse = UserInputService:GetMouseLocation()
+    FOVCircle.Position = UDim2.fromOffset(mouse.X, mouse.Y)
+    FOVCircle.Visible = CONFIG.SilentAim_Enabled
+end)
 
 local HUDVisible = true
 
@@ -288,7 +311,7 @@ local function getClosestToMouse()
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
-        if CONFIG.SilentAim_TeamCheck and player.Team == LocalPlayer.Team then continue end
+        if CONFIG.SilentAim_TeamCheck and LocalPlayer.Team ~= nil and player.Team == LocalPlayer.Team then continue end
         local char = player.Character
         if not char then continue end
         local part  = char:FindFirstChild(CONFIG.SilentAim_TargetPart) or char:FindFirstChild("HumanoidRootPart")
@@ -338,7 +361,7 @@ local function getClosestEnemy()
     local closest, closestDst = nil, 500
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
-        if CONFIG.SilentAim_TeamCheck and player.Team == LocalPlayer.Team then continue end
+        if CONFIG.SilentAim_TeamCheck and LocalPlayer.Team ~= nil and player.Team == LocalPlayer.Team then continue end
         local char = player.Character
         if not char then continue end
         local root  = char:FindFirstChild("HumanoidRootPart")
